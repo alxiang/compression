@@ -437,6 +437,10 @@ class _Auxiliary_Classifier_PatchDiscriminatorCompareGANImpl(abstract_arch.Abstr
                           name="d_conv_a", use_sn=self._spectral_norm)
     net = arch_ops.lrelu(net, leak=0.2)
 
+    cls = tf.layers.flatten(cls)
+    cls = tf.layers.dense(cls, 172)
+    cls = tf.layers.softmax()
+
     # Final 1x1 conv that maps to 1 Channel
     net = arch_ops.conv2d(net, 1, k, k, 1, 1,
                           name="d_conv_b", use_sn=self._spectral_norm)
