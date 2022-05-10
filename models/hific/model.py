@@ -310,7 +310,7 @@ class HiFiC(object):
         builder = tfds.builder(
             tfds_arguments.dataset_name, data_dir=tfds_arguments.downloads_dir)
         builder.download_and_prepare()
-        split = "train" if self.training else "validation"
+        split = "train" if self.training else "test"#"validation"
         dataset = builder.as_dataset(split=split)
 
       def _preprocess(features):
@@ -757,8 +757,14 @@ class HiFiC(object):
 
     d_real, d_fake = tf.split(disc_out_all.d_all, 2)
     d_real_logits, d_fake_logits = tf.split(disc_out_all.d_all_logits, 2)
-    disc_out_split = archs.DiscOutSplit(d_real, d_fake,
-                                        d_real_logits, d_fake_logits)
+
+    if(self._model_type == ModelType.COMPRESSION_GAN):
+      disc_out_split = archs.DiscOutSplit(d_real, d_fake,
+                                          d_real_logits, d_fake_logits)
+    if(self._model_type == ModelType.COMPRESSION_ACGAN):
+      disc_out_split = archs.DiscOutSplit(d_real, d_fake,
+                                          d_real_logits, d_fake_logits,
+                                          disc_out_all.cls_softmax)
 
     if create_summaries:
       tf.summary.scalar("d_real", tf.reduce_mean(disc_out_split.d_real))
