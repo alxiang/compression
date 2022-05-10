@@ -371,6 +371,81 @@ class _PatchDiscriminatorCompareGANImpl(abstract_arch.AbstractDiscriminator):
 
     return DiscOutAll(out, out_logits)
 
+  
+class _Auxiliary_Classifier_PatchDiscriminatorCompareGANImpl(abstract_arch.AbstractDiscriminator):
+  """Auxiliary Classifier PatchDiscriminator architecture. (predicts class in addition )
+
+  Implemented as a compare_gan layer. This has the benefit that we can use
+  spectral_norm from that framework.
+  """
+
+  def __init__(self,
+               name,
+               num_filters_base=64,
+               num_layers=3,
+               ):
+    """Instantiate discriminator.
+
+    Args:
+      name: Name of the layer.
+      num_filters_base: Number of base filters. will be multiplied as we
+        go down in resolution.
+      num_layers: Number of downscaling convolutions.
+    """
+
+    super(_Auxiliary_Classifier_PatchDiscriminatorCompareGANImpl, self).__init__(
+        name, batch_norm_fn=None, layer_norm=False, spectral_norm=True)
+
+    self._num_layers = num_layers
+    self._num_filters_base = num_filters_base
+
+  def __call__(self, x):
+    """Overwriting compare_gan's __call__ as we only need `x`."""
+    with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
+      return self.apply(x)
+
+  def apply(self, x):
+    """Overwriting compare_gan's apply as we only need `x`."""
+    if not isinstance(x, tuple) or len(x) != 2:
+      raise ValueError("Expected 2-tuple, got {}".format(x))
+    x, latent = x
+    x_shape = tf.shape(x)
+
+    # Upscale and fuse latent.
+    latent = arch_ops.conv2d(latent, 12, 3, 3, 1, 1,
+                             name="latent", use_sn=self._spectral_norm)
+    latent = arch_ops.lrelu(latent, leak=0.2)
+    latent = tf.image.resize(latent, [x_shape[1], x_shape[2]],
+                             tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+    x = tf.concat([x, latent], axis=-1)
+
+    # The discriminator:
+    k = 4
+    net = arch_ops.conv2d(x, self._num_filters_base, k, k, 2, 2,
+                          name="d_conv_head", use_sn=self._spectral_norm)
+    net = arch_ops.lrelu(net, leak=0.2)
+
+    num_filters = self._num_filters_base
+    for i in range(self._num_layers - 1):
+      num_filters = min(num_filters * 2, 512)
+      net = arch_ops.conv2d(net, num_filters, k, k, 2, 2,
+                            name=f"d_conv_{i}", use_sn=self._spectral_norm)
+      net = arch_ops.lrelu(net, leak=0.2)
+
+    num_filters = min(num_filters * 2, 512)
+    net = arch_ops.conv2d(net, num_filters, k, k, 1, 1,
+                          name="d_conv_a", use_sn=self._spectral_norm)
+    net = arch_ops.lrelu(net, leak=0.2)
+
+    # Final 1x1 conv that maps to 1 Channel
+    net = arch_ops.conv2d(net, 1, k, k, 1, 1,
+                          name="d_conv_b", use_sn=self._spectral_norm)
+
+    out_logits = tf.reshape(net, [-1, 1])  # Reshape all into batch dimension.
+    out = tf.nn.sigmoid(out_logits)
+
+    return DiscOutAll(out, out_logits)
+
 
 class _CompareGANLayer(tf.keras.layers.Layer):
   """Base class for wrapping compare_gan classes as keras layers.
@@ -420,6 +495,13 @@ class Discriminator(_CompareGANLayer):
     super(Discriminator, self).__init__(
         name="Discriminator",
         compare_gan_cls=_PatchDiscriminatorCompareGANImpl)
+
+class Auxiliary_Classifier_Discriminator(_CompareGANLayer):
+
+  def __init__(self):
+    super(Discriminator, self).__init__(
+        name="Discriminator",
+        compare_gan_cls=_Auxiliary_Classifier_PatchDiscriminatorCompareGANImpl)
 
 
 class Hyperprior(tf.keras.layers.Layer):

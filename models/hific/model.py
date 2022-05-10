@@ -181,7 +181,7 @@ class HiFiC(object):
     self._global_step_disc = None  # global_step used for D training
 
     self._setup_discriminator = (
-        self._model_type == ModelType.COMPRESSION_GAN
+        (self._model_type == ModelType.COMPRESSION_GAN or self._model_type == ModelType.COMPRESSION_ACGAN)
         and (self.training or self.validation))  # No disc for evaluation.
 
     if self._setup_discriminator:
@@ -502,7 +502,10 @@ class HiFiC(object):
 
   def build_discriminator(self):
     """Instantiates discriminator."""
-    self._discriminator = archs.Discriminator()
+    if(self._model_type == ModelType.COMPRESSION_GAN):
+      self._discriminator = archs.Discriminator()
+    elif(self._model_type == ModelType.COMPRESSION_ACGAN):
+      self._discriminator = archs.Auxiliary_Classifier_Discriminator()
 
   def _compute_compression_graph(self, input_image, create_summaries=True):
     """Compute a forward pass through encoder and decoder.

@@ -33,6 +33,8 @@ class ModelType(enum.Enum):
   COMPRESSION = "compression"
   # Additionally train a discriminator, and use GAN loss.
   COMPRESSION_GAN = "compression_gan"
+  # Add ACGAN loss to GAN loss
+  COMPRESSION_ACGAN = "compression_acgan"
 
 
 class ModelMode(enum.Enum):
